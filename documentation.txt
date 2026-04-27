@@ -1,0 +1,198 @@
+High-Level Development Flow
+    We will build in this exact order:
+        Step 1: Agent API skeleton (FastAPI)
+            Endpoint /decide
+        Step 2: OpenRouter LLM setup
+            Plug into LangChain
+        Step 3: Define tools
+            Safety + reasoning helpers
+        Step 4: Build LangChain agent
+            ReAct loop (thought → action → observation)
+        Step 5: Force structured JSON output
+            Prevent messy responses
+        Step 6: Deploy agent
+            Cloud (Render / Railway)
+        Step 7: Connect Ubuntu system
+            Replace local agent with API call
+
+
+
+Final Project Structure:
+    cpu_process_manager_agent/
+    │
+    ├── app/
+    │   ├── main.py              # FastAPI entry point
+    │   │
+    │   ├── agent/
+    │   │   ├── agent.py         # LangChain agent setup
+    │   │   ├── tools.py         # Tools (safety, thresholds, etc.)
+    │   │   ├── prompt.py        # Agent prompt template
+    │   │   └── parser.py        # Output parser (JSON enforcement)
+    │   │
+    │   ├── config/
+    │   │   └── settings.py      # API keys, configs
+    │   │
+    │   ├── models/
+    │   │   └── schemas.py       # Request/Response schemas
+    │   │
+    │   └── utils/
+    │       └── helpers.py       # Optional helpers
+    │
+    ├── requirements.txt
+    ├── .env                     # API keys (OpenRouter)
+    ├── .gitignore
+    └── README.md
+
+
+
+Dependencies: install fastapi uvicorn langchain openai python-dotenv
+
+
+
+
+Project Workflow:
+    Step 1
+        Define API schemas (input/output)
+    Step 2
+        Build prompt (agent brain behavior)
+    Step 3
+        Build tools (agent capabilities)
+    Step 4
+        Build LangChain agent (core)
+    Step 5
+        Connect everything in FastAPI
+    Step 6
+        Test locally
+    Step 7
+        Deploy
+
+
+1. SCHEMAS
+    These define strict structure for:
+        .Input from Linux system->Analysis
+        .Output from agent->Decision
+    This is called a data contract(Very Important in APIs)
+
+2. Build Prompt
+    A structured prompt template is used to define the agent’s role,
+    responsibilities, and constraints. The prompt ensures that the agent
+    behaves as a Linux system administrator, prioritizing safety and
+    stability while making decisions.
+
+3. Build Tools
+    The agent is equipped with tools that allow it to interact
+    with external logic:
+        ProcessSafetyChecker: Determines whether a process is safe to
+        terminate.
+        SystemThresholds: Provides system resource thresholds
+        for informed decision-making.
+    These tools enable the agent to perform reasoning beyond simple text generation.
+
+4. Agent
+    The Agent Core module implements the intelligent decision-making
+    component of the system using LangChain and a large language model.
+
+
+Module-by-Module Interaction
+    Let’s walk through how each module participates in ONE request:
+
+    1.Schemas (schemas.py)
+        Role:Gatekeeper (Validation Layer)
+        When your API receives data:
+        {
+          "status": "NORMAL",
+          "alerts": [...],
+          "high_cpu_process": {...}
+        }
+        This is converted into:
+
+        Analysis object
+            What it ensures:
+            Correct data types
+            No missing fields
+            Clean structured input
+    2.Agent Entry (agent.py)
+        Role:Orchestrator (Controller of logic)
+
+        This module:
+            Creates the LLM
+            Attaches tools
+            Initializes LangChain agent
+            Runs the reasoning process
+        Flow inside:
+            Analysis → formatted prompt → agent.run()
+
+    3.Prompt (prompt.py)
+        Role:Brain Instructions
+
+        The prompt tells the LLM:
+            Who it is → “Linux system agent”
+            What to do → analyze, decide
+            What NOT to do → don’t kill critical processes
+            How to respond → strict JSON
+        Think of it as:
+            Prompt = Personality + Rules + Output format
+
+    4.Tools (tools.py)
+        Role Agent’s Abilities
+
+    Without tools:
+        LLM guesses everything
+
+        With tools:
+        ✔ LLM can query real logic
+
+        Example Flow:
+        Agent sees: firefox using 85% CPU
+
+        Thought: Is this safe to kill?
+        Action: call ProcessSafetyChecker
+        Observation: "safe to terminate"
+        Decision: proceed carefully
+
+
+Combined Execution Flow (Step-by-Step)
+
+    Let’s simulate one request:
+
+    Step 1: Input Comes In
+        {
+          "status": "NORMAL",
+          "high_cpu_process": {
+            "name": "firefox",
+            "cpu_percent": 85
+          }
+        }
+
+    Step 2: Schemas Validate
+        Analysis object created
+
+    Step 3: Agent Runs
+        run_agent(agent, analysis)
+
+    Step 4: Prompt is Filled
+        "You are an intelligent Linux agent...
+        System state: {analysis}"
+
+    Step 5: ReAct Loop Begins
+        Thought → "CPU high for process"
+        Action → check_safe_process("firefox")
+        Observation → "safe to terminate"
+
+    Step 6: Final Decision
+        {
+          "action": "REVIEW",
+          "target_process": {...},
+          "reason": ["High CPU usage detected"]
+        }
+
+    Step 7: Output Returned
+        Later (when API connected):
+        Returned to Ubuntu system → Executor
+
+Roles Summary
+    Module	Role
+    Schemas	Validate input/output
+    Prompt	Define intelligence behavior
+    Tools	Provide real capabilities
+    Agent	Orchestrate reasoning
