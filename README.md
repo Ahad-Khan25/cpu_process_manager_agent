@@ -59,3 +59,34 @@ The agent uses an LLM accessed through OpenRouter, allowing flexible model selec
 ### Purpose
 
 This module transforms the system from a rule-based engine into an intelligent, adaptive agent capable of reasoning, tool usage, and dynamic decision-making.
+
+## System Integration Layer
+
+This module integrates all components of the AI System Manager into a unified API service.
+
+### Overview
+
+The FastAPI application serves as the communication layer between the local Linux system and the AI agent. It receives system state data, processes it through the LangChain-based agent, and returns a structured decision.
+
+### Workflow
+
+1. System sends analysis data to `/decide` endpoint
+2. Data is validated using Pydantic schemas
+3. The agent processes the input using:
+   - Prompt instructions
+   - LLM reasoning (OpenRouter models)
+   - Tool-based execution
+4. The agent generates a structured JSON decision
+5. The response is returned to the system executor
+
+### Key Features
+
+- Centralized AI decision-making
+- Tool-augmented reasoning (ReAct framework)
+- Structured input/output validation
+- Safe fallback handling for LLM errors
+- Stateless API design for cloud deployment
+
+### Purpose
+
+This module transforms the system into a distributed AI-driven architecture where system monitoring and AI reasoning are decoupled, enabling scalability and cloud deployment.
