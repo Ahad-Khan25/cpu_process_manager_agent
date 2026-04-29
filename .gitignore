@@ -1,4 +1,29 @@
+# Virtual environments
+.venv/
+.venv2/
 venv/
 __pycache__/
 *.pyc
+
+# Environment variables
 .env
+*.env
+
+# IDE files
+.idea/
+.vscode/
+
+# Logs
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Python cache
+__pycache__/
+*.pyo
+*.pyd
+
+# FastAPI / local temp
+*.sqlite3
