@@ -1,35 +1,27 @@
-#Tools(Agent Capabilities)
-from langchain_core.tools import Tool #Tool abstraction in LangChain, Lets agent call functions
-
-
-def check_safe_process(process_name: str) -> str: #Function agent can call
+def check_safe_process(process_name: str) -> dict:
     """
-    Checks whether a process is safe to terminate.
+    Returns structured safety info
     """
-    unsafe = ["systemd", "bash", "python", "gnome-shell"] #List of protected processes
+    unsafe = ["systemd", "bash", "python", "gnome-shell"]
 
-    if process_name in unsafe: #Safety logic
-        return f"{process_name} is NOT safe to terminate" #Returns natural language(important for LLM)
+    if process_name in unsafe:
+        return {
+            "safe": False,
+            "reason": "Critical system process"
+        }
     else:
-        return f"{process_name} is safe to terminate"
+        return {
+            "safe": True,
+            "reason": "User-level process"
+        }
 
 
-def get_system_thresholds() -> str: #Gives system limits. Limit for cpu usage, memory usage
+def get_system_thresholds() -> dict:
     """
-    Returns system thresholds.
+    Returns structured thresholds
     """
-    return "CPU threshold: 80%, Memory threshold: 75%, Process CPU threshold: 50%"
-
-
-tools = [ #List of tools available to agent
-    Tool(
-        name="ProcessSafetyChecker", #Tool name(used by agent)
-        func=check_safe_process, #Function to execute
-        description="Check if a process is safe to terminate" #Very important->helps agent decide when to use tool
-    ),
-    Tool(
-        name="SystemThresholds",
-        func=get_system_thresholds,
-        description="Get system thresholds for CPU and memory"
-    )
-]
+    return {
+        "CPU_LIMIT": 80,
+        "MEM_LIMIT": 75,
+        "PROC_CPU_LIMIT": 50
+    }

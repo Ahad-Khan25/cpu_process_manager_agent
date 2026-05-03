@@ -1,40 +1,46 @@
-from fastapi import FastAPI #Web framework from FastAPI
-from app.models.schemas import Analysis, Decision #Import schemas. Ensures input is structured(Analysis) and Output is validated(Decision)
-from app.agent.agent import create_agent, run_agent #Import Agent Functions. Brings the AI brain into API layer
-import json #JSON handling. Used to safely parse LLM output
+from fastapi import FastAPI
+from app.models.schemas import Analysis, Decision
+from app.agent.agent import run_agent
 
-app = FastAPI() #Create App. Starts server instance
-
-# Initialize agent ONCE (important for performance)
-agent = create_agent() #Agent is created once. Not recreated per request. Saves latency+cost
+app = FastAPI()
 
 
-@app.get("/") #Root endpoint. Health check route
+@app.get("/")
 def root():
-    return {"message": "AI System Manager Agent is running"} #Confirms system is live
+    return {"message": "AI System Manager Agent is running"}
 
 
-@app.post("/decide", response_model=Decision) #Main decision endpoint
-def decide(analysis: Analysis): #Function input. Automatically validates incoming JSON using schema
-    """
-    Main endpoint:
-    Receives system state → sends to AI agent → returns decision
-    """
+@app.post("/decide", response_model=Decision)
+def decide(analysis: Analysis):
+    print("\n===== NEW REQUEST =====")
+    print("RAW REQUEST:", analysis)
 
-    # Convert Pydantic model → dict → string
-    analysis_dict = analysis.model_dump()
-
-    # Run agent
-    response = run_agent(agent, analysis_dict) #This triggers: Prompt->LLM->Tools->Reasoning->Output
-
-    # Try to enforce JSON output safety
     try:
-        result = json.loads(response) #Converts string->JSON
-    except Exception as e: #Fallback Safety
-        result = {
+        analysis_dict = analysis.model_dump()
+
+        # Direct structured output
+        result = run_agent(analysis_dict)
+
+        print("FINAL RESULT:", result)
+
+        # FINAL SAFETY GUARD (still keep this)
+        if result["action"] == "KILL_PROCESS":
+            proc = result.get("target_process")
+
+            if proc and proc["name"] in ["systemd", "bash", "python", "gnome-shell"]:
+                return {
+                    "action": "REVIEW",
+                    "target_process": proc,
+                    "reason": ["Blocked unsafe process termination"]
+                }
+
+        return result
+
+    except Exception as e:
+        print("🔥 SERVER ERROR:", str(e))
+
+        return {
             "action": "NONE",
             "target_process": None,
-            "reason": [f"Parsing error: {str(e)}"]
+            "reason": [f"Agent execution failed: {str(e)}"]
         }
-
-    return result #Sends decision back to linux system

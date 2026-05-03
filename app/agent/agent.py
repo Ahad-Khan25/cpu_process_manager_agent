@@ -1,59 +1,78 @@
-from langchain_openai import ChatOpenAI
-from langchain_classic.agents import AgentExecutor, create_react_agent
-from app.agent.tools import tools
-from app.agent.prompt import prompt
-import os
-from dotenv import load_dotenv
-
-load_dotenv()
-
-def create_agent():
-    """
-    Initializes the LLM and creates a ReAct-based agent with tools.
-    """
-    raw_key = os.getenv("OPENROUTER_API_KEY")
-    if not raw_key:
-        raise ValueError("OPENROUTER_API_KEY not found!")
-
-    api_key = raw_key.strip().replace('"', '').replace("'", "").replace('\r', '')
-
-    llm = ChatOpenAI( #Connects to OpenRouter
-        model="mistralai/mistral-7b-instruct", #Uses mistral model
-        api_key=api_key,
-        base_url="https://openrouter.ai/api/v1",
-        default_headers = { #OpenRouter requires specific headers like a Referer for security and routing which the standard OpenAI library used by LangChain doesn't include by default
-            "HTTP-Referer": "http://localhost", #The "Referer" Header: OpenRouter uses this to rank apps and prevent bot abuse. For some models, if this header is missing, their firewall returns a generic 401 User not found instead of a "Missing Header" error.
-            "X-Title": "CPU-Process-Manager-Agent", #The Model ID: While openrouter/mistral-7b-instruct sometimes works, mistralai/mistral-7b-instruct is the canonical ID that ensures your request is routed to the correct compute provider.
-        },
-        temperature = 0,  # temperature=0->deterministic decisions(important for OS systems)
-    )
-
-    # Create ReAct agent (reasoning + tool usage)
-    agent = create_react_agent( #This enables: Thought → Action → Observation → Final Answer
-        llm=llm,
-        tools=tools,
-        prompt=prompt
-    )
-
-    # Wrap agent in executor
-    agent_executor = AgentExecutor( #Handles tools execution, loop control, logging because verbose=true
-        agent=agent,
-        tools=tools,
-        verbose=True
-    )
-
-    return agent_executor
+from app.agent.tools import check_safe_process, get_system_thresholds
 
 
-def run_agent(agent_executor, analysis):
-    """
-    Runs the agent on system analysis input.
-    """
+def run_agent(analysis: dict):
+    # Structured deterministic agent: Input → Tools → Logic → JSON output
 
-    # Convert analysis to string for prompt injection
-    response = agent_executor.invoke({ #Sends system state into the agent
-        "analysis": str(analysis)
-    })
+    status = analysis.get("status")
+    alerts = analysis.get("alerts", [])
+    process = analysis.get("high_cpu_process")
 
-    # Extract final output from agent response
-    return response.get("output", "")
+    # Default response
+    result = {
+        "action": "NONE",
+        "target_process": None,
+        "reason": []
+    }
+
+    # If no process → nothing to do
+    if not process:
+        result["reason"] = ["No high CPU process detected"]
+        return result
+
+    process_name = process.get("name")
+    cpu_usage = process.get("cpu_percent")
+
+    # TOOL 1 → Safety check
+    safety = check_safe_process(process_name)
+
+    # TOOL 2 → Thresholds
+    thresholds = get_system_thresholds()
+    cpu_limit = thresholds["PROC_CPU_LIMIT"]
+
+    # DECISION LOGIC
+
+    # HIGH CPU case
+    if status == "HIGH_CPU":
+
+        # If process exceeds threshold
+        if cpu_usage > cpu_limit:
+
+            # Safe → kill
+            if safety["safe"]:
+                result["action"] = "KILL_PROCESS"
+                result["target_process"] = process
+                result["reason"] = [
+                    f"{process_name} exceeds CPU limit ({cpu_usage}% > {cpu_limit}%)",
+                    "Process is safe to terminate"
+                ]
+                return result
+
+            # Unsafe → review
+            else:
+                result["action"] = "REVIEW"
+                result["target_process"] = process
+                result["reason"] = [
+                    f"{process_name} exceeds CPU limit",
+                    "Process is NOT safe to terminate"
+                ]
+                return result
+
+        # Below threshold → ignore
+        else:
+            result["action"] = "NONE"
+            result["reason"] = [
+                f"{process_name} CPU usage ({cpu_usage}%) is within limit ({cpu_limit}%)"
+            ]
+            return result
+
+    # NORMAL state
+    if status == "NORMAL":
+        result["action"] = "NONE"
+        result["reason"] = ["System operating normally"]
+        return result
+
+    # Fallback
+    result["action"] = "REVIEW"
+    result["reason"] = ["Unhandled system state"]
+    return result
