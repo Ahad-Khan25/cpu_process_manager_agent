@@ -1,92 +1,216 @@
-## Schemas and API Module
+# 🧠 CPU Process Manager Agent
 
-This module defines the data structures and API endpoints for the AI Agent service. It acts as the interface between the local system manager and the deployed AI decision engine.
+An intelligent, modular system management agent designed to monitor system health, analyze resource usage, and make safe, structured decisions about process-level actions in a Linux environment.
 
-### Schemas
+The system is built with a clean separation of concerns across monitoring, analysis, decision-making (agent), execution, and logging — making it both production-friendly and easily extensible.
 
-The system uses Pydantic models to enforce structured communication between components:
+---
 
-- **Process**: Represents a system process with PID, name, and CPU usage.
-- **Analysis**: Represents the analyzed system state received from the local monitoring system.
-- **Decision**: Represents the output of the AI agent, including the recommended action, target process, and reasoning.
+## 🚀 Overview
 
-These schemas ensure type safety, validation, and consistency in API communication.
+This project simulates a lightweight AI-driven system administrator that can:
 
-### API Endpoints
+- Detect abnormal system behavior (CPU spikes, high memory usage)
+- Identify resource-heavy processes
+- Evaluate process safety before taking action
+- Generate structured decisions (JSON-based)
+- Execute safe system-level operations via a dedicated executor module
+- Log and track system decisions
 
-The FastAPI framework is used to expose the AI agent as a web service.
+---
 
-- **GET /**  
-  Health check endpoint to verify that the agent service is running.
+## 🏗️ System Architecture
+Monitor → Analyzer → Agent → Executor → Logger
 
-- **POST /decide**  
-  Accepts system analysis data and returns an AI-generated decision.
 
-### Purpose
+### 🔄 Workflow
 
-This module provides a structured and scalable interface for integrating the AI agent with external systems. It ensures reliable communication and serves as the foundation for deploying the agent as a cloud-based service.
+1. **Monitor**
+   - Collects raw system metrics (CPU, memory, processes)
 
-## Agent Core Module
+2. **Analyzer**
+   - Detects anomalies (e.g., HIGH_CPU, HIGH_MEMORY)
 
-The Agent Core module implements the intelligent decision-making component of the system using LangChain and a large language model.
+3. **Agent**
+   - Applies structured decision logic
+   - Evaluates process safety
+   - Produces a JSON decision
 
-### Prompt Design
+4. **Executor**
+   - Executes system actions (kill, review, warn, ignore)
+   - Enforces safety checks before performing operations
 
-A structured prompt template is used to define the agent’s role, responsibilities, and constraints. The prompt ensures that the agent behaves as a Linux system administrator, prioritizing safety and stability while making decisions.
+5. **Logger**
+   - Records all decisions and actions for audit/debugging
 
-### Tools Integration
+---
 
-The agent is equipped with tools that allow it to interact with external logic:
+## 📦 Tech Stack
 
-- **ProcessSafetyChecker**: Determines whether a process is safe to terminate.
-- **SystemThresholds**: Provides system resource thresholds for informed decision-making.
+- Python 3.10+
+- FastAPI
+- Pydantic (data validation)
+- psutil (system monitoring)
+- Linux OS process control
+- Modular service-based architecture
 
-These tools enable the agent to perform reasoning beyond simple text generation.
+---
 
-### Agent Architecture
+## 🌐 API Interface
 
-The system uses a zero-shot ReAct-based agent, which follows a reasoning loop:
+### 📍 Base URL
 
-1. Thought: Analyze the problem
-2. Action: Call a tool if needed
-3. Observation: Interpret tool output
-4. Final Answer: Generate a structured decision
+http://localhost:8000
 
-### Model Integration
 
-The agent uses an LLM accessed through OpenRouter, allowing flexible model selection and external API-based reasoning.
+---
 
-### Purpose
+### 🔹 GET `/`
 
-This module transforms the system from a rule-based engine into an intelligent, adaptive agent capable of reasoning, tool usage, and dynamic decision-making.
+Health check endpoint.
 
-## System Integration Layer
+#### Response:
+```json
+{
+  "message": "AI System Manager Agent is running"
+}
+```
 
-This module integrates all components of the AI System Manager into a unified API service.
+🔹 POST /decide
 
-### Overview
+Processes system analysis and returns a structured decision.
 
-The FastAPI application serves as the communication layer between the local Linux system and the AI agent. It receives system state data, processes it through the LangChain-based agent, and returns a structured decision.
+Request Body
+```
+{
+  "status": "HIGH_CPU",
+  "alerts": ["High CPU usage detected in chrome"],
+  "high_cpu_process": {
+    "pid": 5555,
+    "name": "chrome",
+    "cpu_percent": 95.0
+  }
+}
+```
 
-### Workflow
+Response Format
 
-1. System sends analysis data to `/decide` endpoint
-2. Data is validated using Pydantic schemas
-3. The agent processes the input using:
-   - Prompt instructions
-   - LLM reasoning (OpenRouter models)
-   - Tool-based execution
-4. The agent generates a structured JSON decision
-5. The response is returned to the system executor
+```
+{
+  "action": "KILL_PROCESS",
+  "target_process": {
+    "pid": 5555,
+    "name": "chrome",
+    "cpu_percent": 95.0
+  },
+  "reason": [
+    "CPU usage exceeds safe threshold",
+    "Process is safe to terminate"
+  ]
+}
+```
 
-### Key Features
+Decision Types
 
-- Centralized AI decision-making
-- Tool-augmented reasoning (ReAct framework)
-- Structured input/output validation
-- Safe fallback handling for LLM errors
-- Stateless API design for cloud deployment
+| Action         | Description                 |
+| -------------- | --------------------------- |
+| `NONE`         | No action required          |
+| `REVIEW`       | Manual/system review needed |
+| `WARN`         | Warning condition detected  |
+| `KILL_PROCESS` | Safe process termination    |
 
-### Purpose
 
-This module transforms the system into a distributed AI-driven architecture where system monitoring and AI reasoning are decoupled, enabling scalability and cloud deployment.
+Safety Mechanisms
+
+This system is designed with strict safety-first principles:
+
+🔒 Protected Processes
+
+These processes will NEVER be terminated:
+
+systemd,
+bash,
+python,
+gnome-shell
+
+📊 Threshold Rules
+
+| Metric            | Limit |
+| ----------------- | ----- |
+| CPU usage         | 80%   |
+| Process CPU usage | 50%   |
+| Memory usage      | 75%   |
+
+Safety Enforcement Layers
+Agent-level validation (decision filtering)
+Executor-level safety checks (final gate before execution)
+Structured JSON enforcement
+
+app/
+│
+├── agent/
+│   ├── agent.py        # Core decision engine (rule-based logic)
+│   ├── tools.py        # System utility functions
+│
+├── executor/
+│   └── executor.py     # Executes safe system actions
+│
+├── models/
+│   └── schemas.py      # Pydantic data models
+│
+├── main.py             # FastAPI entry point
+
+⚙️ How It Works
+1. System Monitoring
+
+System metrics are collected and passed to the analyzer.
+
+2. Analysis Stage
+
+Detects conditions such as:
+
+HIGH_CPU
+NORMAL
+HIGH_MEMORY
+3. Agent Decision Engine
+
+The agent:
+
+Evaluates system status
+Checks process safety
+Compares against thresholds
+Produces structured JSON output
+4. Execution Layer
+
+The executor:
+
+Receives structured decision
+Validates safety rules
+Executes OS-level actions (if allowed)
+5. Logging Layer
+
+All actions are logged for debugging and auditing.
+
+
+Future Improvements
+
+This system is designed to be extended into a full AI-powered infrastructure manager:
+
+🔮 Planned Upgrades
+🤖 LLM-based reasoning layer (hybrid AI agent)
+📊 Adaptive thresholds based on system behavior history
+⚡ Real-time streaming decision engine
+🧠 Anomaly detection using ML models
+🌍 Distributed agent architecture (multi-node systems)
+🔁 Auto-recovery and process restart mechanisms
+
+
+Important Notes
+Requires Linux environment for full functionality
+Process termination requires elevated permissions
+Designed for controlled system environments (not production-critical servers without safeguards)
+
+
+Author
+
+A modular AI-driven system management agent designed to explore intelligent automation in operating systems, combining rule-based AI with structured decision-making principles.
